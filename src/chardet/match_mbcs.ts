@@ -25,6 +25,7 @@ export default function matchMbcs(
   detectBlock: {
     for (iter.reset(); nextChar(iter, det); ) {
       totalCharCount++;
+
       if (iter.error) {
         badCharCount++;
       } else {
@@ -32,12 +33,8 @@ export default function matchMbcs(
 
         if (cv > 0xff) {
           doubleByteCharCount++;
-          if (commonChars != null) {
-            // NOTE: This assumes that there are no 4-byte common chars.
-            if (binarySearch(commonChars, cv) >= 0) {
-              commonCharCount++;
-            }
-          }
+          // NOTE: This assumes that there are no 4-byte common chars.
+          if (binarySearch(commonChars, cv) >= 0) commonCharCount++;
         }
       }
       if (badCharCount >= 2 && badCharCount * 5 >= doubleByteCharCount) {
@@ -59,34 +56,20 @@ export default function matchMbcs(
         //   but is not incompatible with our encoding, so don't give it a zero.
         confidence = 10;
       }
-      break detectBlock;
-    }
-
-    //
-    //  No match if there are too many characters that don't fit the encoding scheme.
-    //    (should we have zero tolerance for these?)
-    //
-    if (doubleByteCharCount < 20 * badCharCount) {
+    } else if (doubleByteCharCount < 20 * badCharCount) {
+      //
+      //  No match if there are too many characters that don't fit the encoding scheme.
+      //    (should we have zero tolerance for these?)
+      //
       confidence = 0;
-      break detectBlock;
-    }
-
-    if (commonChars == null) {
-      // We have no statistics on frequently occurring characters.
-      //  Assess confidence purely on having a reasonable number of
-      //  multi-byte characters (the more the better
-      confidence = 30 + doubleByteCharCount - 20 * badCharCount;
-      if (confidence > 100) {
-        confidence = 100;
-      }
     } else {
       // Frequency of occurrence statistics exist.
       const maxVal = Math.log(doubleByteCharCount / 4);
       const scaleFactor = 90.0 / maxVal;
       confidence = Math.floor(Math.log(commonCharCount + 1) * scaleFactor + 10);
-      confidence = Math.min(confidence, 100);
     }
   } // end of detectBlock:
 
+  if (confidence > 100) confidence = 100;
   return confidence == 0 ? null : { name: name, confidence };
 }

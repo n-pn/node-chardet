@@ -58,6 +58,7 @@ export class GB_18030 implements Recogniser {
     let secondByte = 0;
     let thirdByte = 0;
     let fourthByte = 0;
+
     buildChar: {
       firstByte = iter.charValue = iter.nextByte(det);
       if (firstByte < 0) {
@@ -69,8 +70,10 @@ export class GB_18030 implements Recogniser {
         // single byte char
         break buildChar;
       }
+
       secondByte = iter.nextByte(det);
       iter.charValue = (iter.charValue << 8) | secondByte;
+
       if (firstByte >= 0x81 && firstByte <= 0xfe) {
         // Two byte Char
         if (
@@ -79,6 +82,7 @@ export class GB_18030 implements Recogniser {
         ) {
           break buildChar;
         }
+
         // Four byte char
         if (secondByte >= 0x30 && secondByte <= 0x39) {
           thirdByte = iter.nextByte(det);
@@ -95,6 +99,7 @@ export class GB_18030 implements Recogniser {
         break buildChar;
       }
     }
+
     return iter.done == false;
   }
 }
@@ -140,21 +145,18 @@ export class UTF_16LE implements Recogniser {
 
 export class UTF_8 implements Recogniser {
   match(det: Context): Match | null {
-    let hasBOM = false,
-      numValid = 0,
-      numInvalid = 0,
-      trailBytes = 0,
-      confidence;
+    let numValid = 0;
+    let numInvalid = 0;
+    let trailBytes = 0;
+    let confidence;
+
     const input = det.rawInput;
 
-    if (
+    const hasBOM =
       det.rawLen >= 3 &&
       (input[0] & 0xff) == 0xef &&
       (input[1] & 0xff) == 0xbb &&
-      (input[2] & 0xff) == 0xbf
-    ) {
-      hasBOM = true;
-    }
+      (input[2] & 0xff) == 0xbf;
 
     // Scan for multi-byte sequences
     for (let i = 0; i < det.rawLen; i++) {
@@ -175,10 +177,7 @@ export class UTF_8 implements Recogniser {
       }
 
       // Verify that we've got the right number of trail bytes in the sequence
-      for (;;) {
-        i++;
-        if (i >= det.rawLen) break;
-
+      for (i = i + 1; i < det.rawLen; i++) {
         if ((input[i] & 0xc0) != 0x080) {
           numInvalid++;
           break;
@@ -193,16 +192,14 @@ export class UTF_8 implements Recogniser {
     // Cook up some sort of confidence score, based on presense of a BOM
     //    and the existence of valid and/or invalid multi-byte sequences.
     confidence = 0;
+
     if (hasBOM && numInvalid == 0) confidence = 100;
     else if (hasBOM && numValid > numInvalid * 10) confidence = 80;
     else if (numValid > 3 && numInvalid == 0) confidence = 100;
     else if (numValid > 0 && numInvalid == 0) confidence = 80;
-    else if (numValid == 0 && numInvalid == 0)
-      // Plain ASCII.
-      confidence = 10;
-    else if (numValid > numInvalid * 10)
-      // Probably corrupt utf-8 data.  Valid sequences aren't likely by chance.
-      confidence = 25;
+    else if (numValid == 0 && numInvalid == 0) confidence = 10; // Plain ASCII.
+    // Probably corrupt utf-8 data.  Valid sequences aren't likely by chance.
+    else if (numValid > numInvalid * 10) confidence = 25;
     else return null;
 
     return { name: 'UTF-8', confidence };
